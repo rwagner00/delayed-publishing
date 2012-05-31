@@ -1,0 +1,5 @@
+name = Delayed Publishing
+description = Publishes content at a certain interval.
+core = 7.x
+package = SpyderByte Design Custom
+files[] = dp.module

@@ -1,0 +1,28 @@
+<?php 
+/*
+ * Implements hook_cron to publish blog posts on time delay.
+ */
+function dp_cron() {
+  //Add the date functions that will be called more than once to variables to reduce total calls.
+  $time = date('H');
+  $day = date('D');
+  //Check that time is between 6 and 9 PM on Monday or Friday.
+  if ($time > 18 && $time < 20 && ($day == 'Mon' || $day == 'Fri')) {
+    //Get the next unpublished blog post.
+    $next = db_select('node', 'n')
+      ->fields('n', array('nid'))
+      ->condition('type', 'blog')
+      ->condition('status', '0')
+      ->orderBy('created', 'ASC')
+      ->range(0, 1)
+      ->execute()
+      ->fetchAssoc();
+    //If there is one, publish it.
+    if ($next['nid'] != '') {
+      db_update('node')
+        ->fields(array('status' => 1))
+        ->condition('nid', $next['nid'])
+        ->execute();
+    }
+  }
+}
