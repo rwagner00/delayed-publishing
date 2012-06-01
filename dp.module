@@ -1,4 +1,64 @@
 <?php 
+
+/**
+ * Implements hook_menu().
+ */
+function dp_menu() {
+  $items = array();
+
+  $items['admin/config/content/dp'] = array(
+    'title' => 'Delayed Publishing Administration',
+    'description' => 'Administer the settings for Delayed Publishing',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('delayed_publishing_form'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+function delayed_publishing_form($form, &$form_state) {
+  
+  $form['dp_content_type'] = array(
+    '#type' => 'select',
+    '#title' => t('Content Type'),
+    '#default_value' => variable_get('dp_content_type', 'blog'),
+    '#options' => node_type_get_names(),
+    '#description' => t('Please select the content type for Delayed Publishing to watch.'),
+    '#required' => TRUE,
+  );
+
+  $form['dp_start_time'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Start Time'),
+    '#description' => t('Please type the earliest hour (in 24H format) that Delayed Publishing can publish a node'),
+    '#default_value' => variable_get('dp_start_time', '18'),
+    '#required' => TRUE,
+    '#size' => 10,
+  );
+  
+  $form['dp_end_time'] = array(
+    '#type' => 'textfield',
+    '#title' => t('End Time'),
+    '#description' => t('Please type the latest hour (in 24H format) that Delayed Publishing can publish a node'),
+    '#default_value' => variable_get('dp_end_time', '20'),
+    '#required' => TRUE,
+    '#size' => 10,
+  );
+  
+  $form['dp_days'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Days'),
+    '#description' => t('On what days should Delayed Publishing publish nodes?'),
+    '#required' => TRUE,
+    '#default_value' => variable_get('dp_days', ''),
+    '#options' => drupal_map_assoc(array('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')),
+  );
+    
+  return system_settings_form($form);
+}
+
 /*
  * Implements hook_cron to publish blog posts on time delay.
  */
@@ -6,12 +66,17 @@ function dp_cron() {
   //Add the date functions that will be called more than once to variables to reduce total calls.
   $time = date('H');
   $day = date('D');
+  $start = variable_get('dp_start_time', '18');
+  $end = variable_get('dp_end_time', '20');
+  $days = variable_get('dp_days');  
   //Check that time is between 6 and 9 PM on Monday or Friday.
-  if ($time > 18 && $time < 20 && ($day == 'Mon' || $day == 'Fri')) {
+  if ($time >= $start && $time <= $end && in_array($day, $days, TRUE) ) {
+    $type = variable_get('dp_content_type', 'blog');
+    
     //Get the next unpublished blog post.
     $next = db_select('node', 'n')
       ->fields('n', array('nid'))
-      ->condition('type', 'blog')
+      ->condition('type', $type)
       ->condition('status', '0')
       ->orderBy('created', 'ASC')
       ->range(0, 1)
@@ -19,10 +84,9 @@ function dp_cron() {
       ->fetchAssoc();
     //If there is one, publish it.
     if ($next['nid'] != '') {
-      db_update('node')
-        ->fields(array('status' => 1))
-        ->condition('nid', $next['nid'])
-        ->execute();
+      $node = node_load($next['nid']);
+      $node->status = 1;
+      node_save($node);
     }
   }
 }
